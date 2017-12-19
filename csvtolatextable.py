@@ -8,39 +8,39 @@ colors = ["{\cellcolor{blue!20}}","{\cellcolor{green!20}}","{\cellcolor{yellow!2
 smallest = False
 fulldocument = False
 
-def create_header(data_frame, number_of_columns):
+def create_header(data_frame):
     rows_string = ''
     if fulldocument:
         rows_string = r'\documentclass[landscape]{article}' + '\n' + r'\usepackage{xcolor}' + '\n' + r'\usepackage{colortbl}' + '\n' + r'\begin{document}' + '\n'
         rows_string = rows_string + r'\noindent\makebox[\textwidth]{' +'\n'
-    rows_string = rows_string + r'\begin{tabular}{' + '|c' * number_of_columns + '|}\n' + '\\hline \n'
+    rows_string = rows_string + r'\begin{tabular}{' + '|c' * data_frame.shape[1] + '|}\n' + '\\hline \n'
     rows_string = rows_string + " & ".join(data_frame.columns.values.tolist()) + r'\\ ' + '\hline \n'
     return rows_string
 
-def get_nth_largest_values(data_frame, dataset, nth, number_of_columns):
+def get_nth_largest_values(data_frame, dataset, nth, number_of_rows):
     nlargestValues = pd.to_numeric(data_frame.iloc[dataset][1:]).nlargest(nth).unique()
     count = nth
-    while len(nlargestValues) != nth and count <= number_of_columns:
+    while len(nlargestValues) != nth and count <= number_of_rows:
         count = count + 1
         nlargestValues = pd.to_numeric(data_frame.iloc[dataset][1:]).nlargest(count).unique()
     return nlargestValues
 
-def get_nth_smallest_values(data_frame, dataset, nth, number_of_columns):
+def get_nth_smallest_values(data_frame, dataset, nth, number_of_rows):
     nsmallestValues = pd.to_numeric(data_frame.iloc[dataset][1:]).nsmallest(nth).unique()
     count = nth
-    while len(nsmallestValues) != nth and count <= number_of_columns:
+    while len(nsmallestValues) != nth and count <= number_of_rows:
         count = count + 1
         nsmallestValues = pd.to_numeric(data_frame.iloc[dataset][1:]).nsmallest(count).unique()
     return nsmallestValues
 
 def get_latex_string(data_frame, nth):
-    number_of_columns = len(data_frame.columns)
-    rows_string = create_header(data_frame, number_of_columns)
-    for dataset in range(number_of_columns):
+    number_of_rows = data_frame.shape[0]
+    rows_string = create_header(data_frame)
+    for dataset in range(number_of_rows):
         if smallest:
-            nValues = get_nth_smallest_values(data_frame, dataset, nth, number_of_columns)
+            nValues = get_nth_smallest_values(data_frame, dataset, nth, number_of_rows)
         else:
-            nValues = get_nth_largest_values(data_frame, dataset, nth, number_of_columns)
+            nValues = get_nth_largest_values(data_frame, dataset, nth, number_of_rows)
         for value in range(len(data_frame.iloc[dataset])):
             delimiter_char = r' & '
             if value == len(data_frame.iloc[dataset]) -1:
