@@ -127,8 +127,8 @@ def main():
     parser.add_argument("-f", "--full", action="store_true", help="creates a "
                         "complete .tex document, rather than only the tabular"
                         "statement")
-    parser.add_argument("--variance", help="file containing variance values,
-                        that will be added after values in brackets")
+    parser.add_argument("--variance", help="file containing variance values,"
+                        "that will be added after values in brackets")
     args = parser.parse_args()
     if args.smallest:
         smallest = True
