@@ -49,7 +49,7 @@ def get_nth_smallest_values(data_frame, dataset, nth, number_of_rows):
     return nsmallestValues
 
 
-def get_latex_string(data_frame, nth):
+def get_latex_string(data_frame, nth, variance_frame=None):
     number_of_rows = data_frame.shape[0]
     rows_string = create_header(data_frame)
     for dataset in range(number_of_rows):
@@ -68,15 +68,38 @@ def get_latex_string(data_frame, nth):
                     delimiter_char
             else:
                 cellvalue = data_frame.iloc[dataset][value]
+                if variance_frame is not None:
+                    varvalue = variance_frame.iloc[dataset][value]
                 extreme_value = False
                 for i in range(len(nValues)):
                     if cellvalue == nValues[i]:
-                        rows_string = rows_string + colors[i] + str(cellvalue)\
-                            + delimiter_char
+                        cellvalue = "{num:.{prec}f}".format(
+                            num=data_frame.iloc[dataset][value],
+                            prec=precision)
+                        if variance_frame is not None:
+                            varvalue = "{num:.{prec}f}".format(
+                                num=variance_frame.iloc[dataset][value],
+                                prec=precision)
+                            rows_string = rows_string + colors[i] +\
+                                cellvalue + " (" + varvalue +\
+                                ")" + delimiter_char
+                        else:
+                            rows_string = rows_string + colors[i] +\
+                                cellvalue + delimiter_char
                         extreme_value = True
                         break
                 if not extreme_value:
-                    rows_string = rows_string + str(cellvalue) + delimiter_char
+                    cellvalue = "{num:.{prec}f}".format(
+                        num=data_frame.iloc[dataset][value], prec=precision)
+                    if variance_frame is not None:
+                        varvalue = "{num:.{prec}f}".format(
+                            num=variance_frame.iloc[dataset][value],
+                            prec=precision)
+                        rows_string = rows_string + cellvalue + " (" +\
+                            varvalue + ")" + delimiter_char
+                    else:
+                        rows_string = rows_string + cellvalue +\
+                            delimiter_char
     rows_string = rows_string + '\\hline \n \\end{tabular}'
     if fulldocument:
         rows_string = rows_string + '}\n'
@@ -104,6 +127,8 @@ def main():
     parser.add_argument("-f", "--full", action="store_true", help="creates a "
                         "complete .tex document, rather than only the tabular"
                         "statement")
+    parser.add_argument("--variance", help="file containing variance values,
+                        that will be added after values in brackets")
     args = parser.parse_args()
     if args.smallest:
         smallest = True
@@ -116,13 +141,16 @@ def main():
         nth = args.nelements
     if args.full:
         fulldocument = True
+    if args.variance:
+        variance_frame = pd.read_csv(args.variance, sep='\t')
+        variance_frame = variance_frame.round(precision)
 
     # Read
     data_frame = pd.read_csv(args.inputpath, sep='\t')
     data_frame = data_frame.round(precision)
 
     # Get latex string
-    result = get_latex_string(data_frame, nth)
+    result = get_latex_string(data_frame, nth, variance_frame)
 
     # Write result
     with open(args.outputpath, 'w') as out_file:
