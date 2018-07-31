@@ -132,7 +132,7 @@ def main():
     args = parser.parse_args()
     if args.smallest:
         smallest = True
-    if args.precision:
+    if args.precision is not None:
         precision = args.precision
     if args.nelements:
         if args.nelements > 3 or args.nelements < 1:
@@ -141,16 +141,17 @@ def main():
         nth = args.nelements
     if args.full:
         fulldocument = True
-    if args.variance:
-        variance_frame = pd.read_csv(args.variance, sep='\t')
-        variance_frame = variance_frame.round(precision)
 
     # Read
     data_frame = pd.read_csv(args.inputpath, sep='\t')
     data_frame = data_frame.round(precision)
 
-    # Get latex string
-    result = get_latex_string(data_frame, nth, variance_frame)
+    if args.variance:
+        variance_frame = pd.read_csv(args.variance, sep='\t')
+        variance_frame = variance_frame.round(precision)
+        result = get_latex_string(data_frame, nth, variance_frame)
+    else:
+        result = get_latex_string(data_frame, nth)
 
     # Write result
     with open(args.outputpath, 'w') as out_file:
