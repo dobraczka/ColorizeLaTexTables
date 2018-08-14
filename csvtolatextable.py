@@ -116,7 +116,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("inputpath", help="the path to the .csv table")
     parser.add_argument("outputpath", help="the path where you want the"
-                        ".tex file")
+                        ".tex file", nargs="?", default=None)
     parser.add_argument("-s", "--smallest", action="store_true",
                         help="highlight smallest, default is largest")
     parser.add_argument("-p", "--precision", type=int, help="decimal precision"
@@ -153,9 +153,12 @@ def main():
     else:
         result = get_latex_string(data_frame, nth)
 
-    # Write result
-    with open(args.outputpath, 'w') as out_file:
-        out_file.write(result)
+    if args.outputpath is None:
+        print result
+    else:
+        # Write result
+        with open(args.outputpath, 'w') as out_file:
+            out_file.write(result)
 
 
 if __name__ == "__main__":
