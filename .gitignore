@@ -1,0 +1,6 @@
+*.bak
+*.swp
+*.egg-info
+build/
+dist/
+*/__py_cache__/
