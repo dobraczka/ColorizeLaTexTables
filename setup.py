@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="colorizelatextables",
-    version="1.0",
+    version="1.1",
     scripts=["colorizelatextables/colorize_table.py"],
     author="Daniel Obraczka",
     author_email="",

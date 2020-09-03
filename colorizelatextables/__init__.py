@@ -1,1 +1,1 @@
-from colorizelatextables.colorize_table import to_colored_latex
+from colorizelatextables.colorize_table import to_colorized_latex
