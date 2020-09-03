@@ -91,7 +91,7 @@ def _create_color_palette(rgb_list):
     return defined, color_proxy, colors
 
 
-def colorize(row, n, precision, ascending, color_proxy):
+def _colorize(row, n, precision, ascending, color_proxy):
     # test if contains numeric
     if not pd.to_numeric(row, errors="coerce").notnull().all():
         return row
@@ -107,15 +107,14 @@ def colorize(row, n, precision, ascending, color_proxy):
     return row
 
 
-def to_colored_latex(
+def to_colorized_latex(
     df: pd.DataFrame,
     colors_rgb: List[Tuple[float]],
-    n=3,
     precision=3,
     ascending=False,
     columnwise=False,
-    **latex_kwargs
-):
+    **latex_kwargs,
+) -> (str, str):
     """Transforms pandas DataFrame to colorized LaTex table, with cells colored based on cell rank.
 
     Parameters
@@ -125,10 +124,7 @@ def to_colored_latex(
     colors_rgb : List [Tuple[float]]
         colors that will be used to color cells in rank order.
         It is recommended to use this to pass seaborn color palettes e.g.
-        ``reversed(sns.color_palette("Greens",n_colors=n))``
-        Reversal is necessary recommended, because seaborn palettes are from light to dark which is counterintuitive to the desired effect
-    n: int, default 3
-        Number of ranks to highlight
+        ``sns.color_palette("Greens_r",n_colors=n))``
     precison: int
         Number of decimals to which the DataFrame will be rounded
     ascending: bool, default False
@@ -136,11 +132,11 @@ def to_colored_latex(
     columnwise: bool, default False
         if True, calculate column-wise rank, else row-wise rank
     kwargs: key, value mappings
-        Other keyword arguments are passed down to `pandas.DataFrame.to_latex()`.
+        Other keyword arguments are passed down to ``pandas.DataFrame.to_latex()``.
 
     Returns
     -------
-    latex_string: str
+    table_string: str
         string representation of latex table
     defined_colors: str
         latex definition of used colors
@@ -148,7 +144,7 @@ def to_colored_latex(
     axis = 0 if columnwise else 1
     defined, color_proxy, colors = _create_color_palette(colors_rgb)
     string_df = df.apply(
-        colorize, args=(n, precision, ascending, color_proxy), axis=axis
+        _colorize, args=(len(color_proxy), precision, ascending, color_proxy), axis=axis
     )
     latex_str = string_df.to_latex(**latex_kwargs)
     for p, c in zip(color_proxy, colors):
@@ -167,31 +163,29 @@ def main():
         default=None,
     )
     parser.add_argument(
-        "-s",
-        "--smallest",
+        "-a",
+        "--ascending",
         action="store_true",
-        help="highlight smallest, default is largest",
+        help="highlight from smallest to largest, default is descending",
     )
     parser.add_argument(
         "--precision", type=int, help="decimal precision" ",default is 3", default=3,
     )
     parser.add_argument(
-        "-n",
-        "--nelements",
-        type=int,
-        help="highlight largest"
-        "/smallest, secondlargest/smallest, ..., "
-        "nthlargest/smallest.",
-        default=3,
+        "-n", "--nranks", type=int, help="number of ranks to highlight", default=3,
     )
-    parser.add_argument("--colors", type=str, help="rgb_codes as list of float triples")
+    parser.add_argument(
+        "--colors",
+        type=str,
+        help="rgb_codes as list of float triples. if you have seaborn it is recommended to use the --palette option",
+    )
     parser.add_argument("--palette", type=str, help="seaborn color palette name")
     parser.add_argument(
         "-f",
         "--full",
         action="store_true",
         help="creates a "
-        "complete .tex document, rather than only the tabular"
+        "complete .tex document, rather than only the tabular "
         "statement",
         default=False,
     )
@@ -206,14 +200,17 @@ def main():
     args = parser.parse_args()
     if args.colors:
         colors_rgb = ast.literal_eval(args.colors)
+        if args.nranks != len(colors_rgb):
+            print(
+                f"Warning! Number of colors ({len(colors_rgb)}) and n ({args.nranks})are not equal!"
+            )
     elif args.palette:
         import seaborn as sns
 
-        # reverse because we want from darkest to lightest
-        colors_rgb = reversed(sns.color_palette(args.palette, n_colors=args.nelements))
+        colors_rgb = sns.color_palette(args.palette, n_colors=args.nranks)
     else:
         try:
-            colors_rgb = default_color_palettes[args.nelements]
+            colors_rgb = default_color_palettes[args.nranks]
         except KeyError:
             print(
                 "No default palette with {args.nelements} values available, please provide list of rgb colorcodes"
@@ -224,13 +221,8 @@ def main():
     data_frame = pd.read_csv(args.inputpath, sep=args.seperator, index_col=0, header=0)
     data_frame = data_frame.round(args.precision)
 
-    result, defined = to_colored_latex(
-        data_frame,
-        colors_rgb,
-        args.nelements,
-        args.precision,
-        args.smallest,
-        args.columnwise,
+    result, defined = to_colorized_latex(
+        data_frame, colors_rgb, args.precision, args.ascending, args.columnwise,
     )
 
     if args.full:
