@@ -1,5 +1,6 @@
 ## ColorizeLaTexTables: small script to get color coded latex tables from csv files or pandas DataFrames
 ![colorized table](images/bigtable.png)
+Create latex tables that are colored based on rank.
 # Installation
 Install via pip:
 ```
