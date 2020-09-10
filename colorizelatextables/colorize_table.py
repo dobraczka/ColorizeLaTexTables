@@ -69,13 +69,47 @@ default_color_palettes = {
     ],
 }
 
+_BRACKET_OPEN = " BRACKET PLACEHOLDER OPEN "
+_BRACKET_CLOSE = " BRACKET PLACEHOLDER CLOSE "
+_DARK_COLOR_STR = " IS DARK COLOR " + _BRACKET_OPEN
 
-def _create_color_palette(rgb_list):
+
+def add_avg_rank(df, avg_rank_name="Avg Rank", axis=1):
+    ranked = (
+        df.apply(lambda x: x.rank(ascending=False), axis=axis)
+        .mean()
+        .rename(avg_rank_name)
+    )
+    return df.append(ranked)
+
+
+def _too_dark(rgba) -> bool:
+    """
+    Adapted from pandas.io.formats.style.py
+    Calculate if color is too dark for black text based
+    on relative luminance of a color.
+    The calculation adheres to the W3C standards
+    (https://www.w3.org/WAI/GL/wiki/Relative_luminance)
+    Parameters
+    ----------
+    color : rgb or rgba tuple
+    Returns
+    -------
+    bool
+        True if too dark, i.e. relative luminence < 0.408
+    """
+    r, g, b = (
+        x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055 ** 2.4) for x in rgba[:3]
+    )
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) < 0.408
+
+
+def _create_color_palette(rgb_list, prefix="rankcolor"):
+    global dark_colors
     defined = []
     color_proxy = []
     colors = []
     it = 1
-    prefix = "rankcolor"
     for color in rgb_list:
         cname = prefix + str(it)
         defined.append(
@@ -85,26 +119,77 @@ def _create_color_palette(rgb_list):
             + ",".join([str(v) for v in color])
             + "}"
         )
-        color_proxy.append(cname)
+        proxy = " BEGIN" + cname + "END "
+        if _too_dark(color):
+            dark_colors.append(proxy)
+        color_proxy.append(proxy)
         it += 1
         colors.append("{\cellcolor{" + cname + "}}")
     return defined, color_proxy, colors
 
 
-def _colorize(row, n, precision, ascending, color_proxy):
+def _format(value, float_format):
+    if isinstance(float_format, str):
+        return float_format % value
+    return float_format(value)
+
+
+def _create_colorized_cell(color_str, formatted_value):
+    if color_str in dark_colors:
+        return color_str + _BRACKET_OPEN + formatted_value + _BRACKET_CLOSE
+    return color_str + formatted_value
+
+
+def _colorize(
+    row,
+    n,
+    precision,
+    ascending,
+    color_proxy,
+    avg_rank_color_proxy,
+    avg_rank_name,
+    float_format,
+):
     # test if contains numeric
     if not pd.to_numeric(row, errors="coerce").notnull().all():
         return row
+    if avg_rank_name is not None and row.name == avg_rank_name:
+        ascending = True
+        color_proxy = avg_rank_color_proxy
     row = pd.to_numeric(row).round(precision)
+    new = []
     ranks = row.rank(ascending=ascending)
     colored_ranks = ranks.drop_duplicates().nsmallest(n).to_list()
     for row_entry, r in zip(row.items(), ranks):
         i, e = row_entry
         if r in colored_ranks:
-            row[i] = color_proxy[colored_ranks.index(r)] + str(e)
+            new.append(
+                _create_colorized_cell(
+                    color_proxy[colored_ranks.index(r)], _format(e, float_format)
+                )
+            )
         else:
-            row[i] = str(e)
-    return row
+            new.append(_format(e, float_format))
+    return pd.Series(new, row.index)
+
+
+def _replace_placeholders(
+    latex_str,
+    color_proxy,
+    colors,
+    add_rank,
+    avg_rank_colors_rgb,
+    avg_rank_color_proxy,
+    avg_rank_colors,
+):
+    for p, c in zip(color_proxy, colors):
+        latex_str = latex_str.replace(p, c)
+    if add_rank or avg_rank_colors_rgb is not None:
+        for p, c in zip(avg_rank_color_proxy, avg_rank_colors):
+            latex_str = latex_str.replace(p, c)
+    return latex_str.replace(_BRACKET_OPEN, "\\textcolor{white}{").replace(
+        _BRACKET_CLOSE, "}"
+    )
 
 
 def to_colorized_latex(
@@ -113,6 +198,9 @@ def to_colorized_latex(
     precision=3,
     ascending=False,
     columnwise=False,
+    add_rank=False,
+    avg_rank_colors_rgb=None,
+    avg_rank_name="Avg Rank",
     **latex_kwargs,
 ) -> (str, str):
     """Transforms pandas DataFrame to colorized LaTex table, with cells colored based on cell rank.
@@ -131,7 +219,14 @@ def to_colorized_latex(
         Whether or not the elements should be ranked in ascending order.
     columnwise: bool, default False
         if True, calculate column-wise rank, else row-wise rank
-    kwargs: key, value mappings
+    add_rank: bool, default False
+        if True, add avg rank as column/row
+    avg_rank_colors_rgb: List [Tuple[float]]
+        colors that will be used to color cells for avg rank column/row in rank order.
+        keep in mind that avg rank column will be colored in ascending order
+    avg_rank_name: str, default "Avg Rank"
+        name of new avg rank column/row
+    latex_kwargs: key, value mappings
         Other keyword arguments are passed down to ``pandas.DataFrame.to_latex()``.
 
     Returns
@@ -141,14 +236,53 @@ def to_colorized_latex(
     defined_colors: str
         latex definition of used colors
     """
+    global dark_colors
+    dark_colors = []
+    old_colwidth = pd.get_option("display.max_colwidth")
+    pd.set_option("display.max_colwidth", None)
     axis = 0 if columnwise else 1
     defined, color_proxy, colors = _create_color_palette(colors_rgb)
+    if add_rank or avg_rank_colors_rgb is not None:
+        if avg_rank_colors_rgb is None:
+            avg_rank_colors_rgb = colors_rgb
+        avg_rank_defined, avg_rank_color_proxy, avg_rank_colors = _create_color_palette(
+            avg_rank_colors_rgb, "avgrankcolor"
+        )
+        defined.extend(avg_rank_defined)
+        df = add_avg_rank(df, avg_rank_name, axis)
+    else:
+        avg_rank_color_proxy = None
+        avg_rank_colors = None
+    float_format = (
+        latex_kwargs["float_format"]
+        if "float_format" in latex_kwargs
+        else "%." + str(precision) + "f"
+    )
+    latex_kwargs["float_format"] = None
     string_df = df.apply(
-        _colorize, args=(len(color_proxy), precision, ascending, color_proxy), axis=axis
+        _colorize,
+        args=(
+            len(color_proxy),
+            precision,
+            ascending,
+            color_proxy,
+            avg_rank_color_proxy,
+            avg_rank_name,
+            float_format,
+        ),
+        axis=axis,
     )
     latex_str = string_df.to_latex(**latex_kwargs)
-    for p, c in zip(color_proxy, colors):
-        latex_str = latex_str.replace(p, c)
+    latex_str = _replace_placeholders(
+        latex_str,
+        color_proxy,
+        colors,
+        add_rank,
+        avg_rank_colors,
+        avg_rank_color_proxy,
+        avg_rank_colors,
+    )
+    pd.set_option("display.max_colwidth", old_colwidth)
     return latex_str, defined
 
 
