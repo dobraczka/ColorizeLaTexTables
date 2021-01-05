@@ -74,11 +74,11 @@ _BRACKET_CLOSE = " BRACKET PLACEHOLDER CLOSE "
 _DARK_COLOR_STR = " IS DARK COLOR " + _BRACKET_OPEN
 
 
-def add_avg_rank(df, avg_rank_name="Avg Rank", axis=1):
+def add_avg_rank(df, avg_rank_name="Avg Rank"):
+    if isinstance(df.index, pd.core.index.MultiIndex):
+        avg_rank_name = (avg_rank_name,) * len(df.index.names)
     ranked = (
-        df.apply(lambda x: x.rank(ascending=False), axis=axis)
-        .mean()
-        .rename(avg_rank_name)
+        df.apply(lambda x: x.rank(ascending=False), axis=1).mean().rename(avg_rank_name)
     )
     return df.append(ranked)
 
@@ -153,9 +153,12 @@ def _colorize(
     # test if contains numeric
     if not pd.to_numeric(row, errors="coerce").notnull().all():
         return row
-    if avg_rank_name is not None and row.name == avg_rank_name:
-        ascending = True
-        color_proxy = avg_rank_color_proxy
+    if avg_rank_name is not None:
+        if (isinstance(row.name, str) and row.name == avg_rank_name) or (
+            isinstance(row.name, Tuple) and avg_rank_name in row.name
+        ):
+            ascending = True
+            color_proxy = avg_rank_color_proxy
     row = pd.to_numeric(row).round(precision)
     new = []
     ranks = row.rank(ascending=ascending)
@@ -181,15 +184,28 @@ def _replace_placeholders(
     avg_rank_colors_rgb,
     avg_rank_color_proxy,
     avg_rank_colors,
+    avg_rank_name,
 ):
     for p, c in zip(color_proxy, colors):
         latex_str = latex_str.replace(p, c)
     if add_rank or avg_rank_colors_rgb is not None:
         for p, c in zip(avg_rank_color_proxy, avg_rank_colors):
             latex_str = latex_str.replace(p, c)
-    return latex_str.replace(_BRACKET_OPEN, "\\textcolor{white}{").replace(
+    latex_str = latex_str.replace(_BRACKET_OPEN, "\\textcolor{white}{").replace(
         _BRACKET_CLOSE, "}"
     )
+    search_mult_rank = avg_rank_name + " & "
+    # fix multiindex
+    if latex_str.count(search_mult_rank) > 1:
+        latex_str = latex_str.replace(
+            search_mult_rank * latex_str.count(search_mult_rank),
+            "\multicolumn{"
+            + str(latex_str.count(search_mult_rank))
+            + "}{c}{"
+            + avg_rank_name
+            + "} & ",
+        )
+    return latex_str
 
 
 def to_colorized_latex(
@@ -235,11 +251,24 @@ def to_colorized_latex(
         string representation of latex table
     defined_colors: str
         latex definition of used colors
+
+    Raises
+    -------
+    Exception if columnwise colorizing and adding of rank is specified
+
+    Notes
+    -------
+    Adding rank is only possible for rowwise ranking
     """
+    if columnwise and (add_rank or avg_rank_colors_rgb is not None):
+        raise Exception("Adding rank is only possible for rowwise ranking")
     global dark_colors
     dark_colors = []
     old_colwidth = pd.get_option("display.max_colwidth")
-    pd.set_option("display.max_colwidth", None)
+    try:
+        pd.set_option("display.max_colwidth", None)
+    except ValueError:
+        pd.set_option("display.max_colwidth", -1)
     axis = 0 if columnwise else 1
     defined, color_proxy, colors = _create_color_palette(colors_rgb)
     if add_rank or avg_rank_colors_rgb is not None:
@@ -249,7 +278,7 @@ def to_colorized_latex(
             avg_rank_colors_rgb, "avgrankcolor"
         )
         defined.extend(avg_rank_defined)
-        df = add_avg_rank(df, avg_rank_name, axis)
+        df = add_avg_rank(df, avg_rank_name)
     else:
         avg_rank_color_proxy = None
         avg_rank_colors = None
@@ -281,6 +310,7 @@ def to_colorized_latex(
         avg_rank_colors,
         avg_rank_color_proxy,
         avg_rank_colors,
+        avg_rank_name,
     )
     pd.set_option("display.max_colwidth", old_colwidth)
     return latex_str, defined
