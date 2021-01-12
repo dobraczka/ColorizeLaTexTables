@@ -78,7 +78,7 @@ _DARK_COLOR_STR = " IS DARK COLOR " + _BRACKET_OPEN
 def add_avg_rank(df, avg_rank_name="Avg Rank", level_subset=None, level=None):
     if isinstance(df.index, pd.MultiIndex):
         avg_rank_name = (avg_rank_name,) * len(df.index.names)
-    if isinstance(df.columns, pd.MultiIndex):
+    if level is not None:
         return (
             df.xs(level_subset, level=level, axis=1)
             .apply(lambda x: x.rank(ascending=False), axis=1)
@@ -359,7 +359,7 @@ def to_colorized_latex(
     avg_rank_latex = _avg_rank_to_latex(col_avg_rank, df, float_format, avg_rank_name)
     latex_str = latex_str.replace(
         "\\\\\n\\bottomrule\n\\end{tabular}",
-        "\\ \n" + avg_rank_latex + "\n\\bottomrule\n\\end{tabular}",
+        "\\\\\n" + avg_rank_latex + "\n\\bottomrule\n\\end{tabular}",
     )
     latex_str = _replace_placeholders(
         latex_str,
