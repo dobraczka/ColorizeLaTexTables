@@ -4,7 +4,8 @@ import sys
 import argparse
 import pandas as pd
 import ast
-from typing import List, Tuple
+from typing import List, Tuple, Union, Any
+from itertools import groupby
 
 default_color_palettes = {
     2: [
@@ -74,13 +75,21 @@ _BRACKET_CLOSE = " BRACKET PLACEHOLDER CLOSE "
 _DARK_COLOR_STR = " IS DARK COLOR " + _BRACKET_OPEN
 
 
-def add_avg_rank(df, avg_rank_name="Avg Rank"):
-    if isinstance(df.index, pd.core.index.MultiIndex):
+def add_avg_rank(df, avg_rank_name="Avg Rank", level_subset=None, level=None):
+    if isinstance(df.index, pd.MultiIndex):
         avg_rank_name = (avg_rank_name,) * len(df.index.names)
-    ranked = (
+    if isinstance(df.columns, pd.MultiIndex):
+        return (
+            df.xs(level_subset, level=level, axis=1)
+            .apply(lambda x: x.rank(ascending=False), axis=1)
+            .mean()
+            .rename(avg_rank_name)
+        )
+
+    return (
         df.apply(lambda x: x.rank(ascending=False), axis=1).mean().rename(avg_rank_name)
     )
-    return df.append(ranked)
+    # return df.append(ranked)
 
 
 def _too_dark(rgba) -> bool:
@@ -149,6 +158,9 @@ def _colorize(
     avg_rank_color_proxy,
     avg_rank_name,
     float_format,
+    level,
+    level_subset,
+    isranks=False,
 ):
     # test if contains numeric
     if not pd.to_numeric(row, errors="coerce").notnull().all():
@@ -161,7 +173,17 @@ def _colorize(
             color_proxy = avg_rank_color_proxy
     row = pd.to_numeric(row).round(precision)
     new = []
-    ranks = row.rank(ascending=ascending)
+    if isranks:
+        ranks = row
+        ascending = True
+        color_proxy = avg_rank_color_proxy
+    else:
+        if level is not None:
+            ranks = row[row.index.get_level_values(level).isin([level_subset])].rank(
+                ascending=ascending
+            )
+        else:
+            ranks = row.rank(ascending=ascending)
     colored_ranks = ranks.drop_duplicates().nsmallest(n).to_list()
     for row_entry, r in zip(row.items(), ranks):
         i, e = row_entry
@@ -173,7 +195,25 @@ def _colorize(
             )
         else:
             new.append(_format(e, float_format))
-    return pd.Series(new, row.index)
+    if len(new) == len(row.index):
+        return pd.Series(new, row.index)
+    # multicolumn
+    else:
+        combined = pd.Series(new, ranks.index).combine_first(row)
+        return combined.reindex(index=row.index)
+
+
+def _avg_rank_to_latex(avg_rank_series, df, float_format, avg_rank_name):
+    if not isinstance(df.columns, pd.MultiIndex):
+        return " & ".join(avg_rank_series) + "\\\\ \n"
+    else:
+        top = list(df.columns.get_level_values(0))
+        col_counts = [sum(1 for _ in group) for _, group in groupby(top)]
+        latex_str = avg_rank_name + " & "
+        for c, v in zip(col_counts, avg_rank_series.to_list()):
+            latex_str += "\\multicolumn{" + str(c) + "}{c}{" + v + "} & "
+        # remove last &
+        return latex_str[:-3] + "\\\\ \n"
 
 
 def _replace_placeholders(
@@ -185,6 +225,7 @@ def _replace_placeholders(
     avg_rank_color_proxy,
     avg_rank_colors,
     avg_rank_name,
+    index_levels,
 ):
     for p, c in zip(color_proxy, colors):
         latex_str = latex_str.replace(p, c)
@@ -194,16 +235,11 @@ def _replace_placeholders(
     latex_str = latex_str.replace(_BRACKET_OPEN, "\\textcolor{white}{").replace(
         _BRACKET_CLOSE, "}"
     )
-    search_mult_rank = avg_rank_name + " & "
     # fix multiindex
-    if latex_str.count(search_mult_rank) > 1:
+    if index_levels > 1:
         latex_str = latex_str.replace(
-            search_mult_rank * latex_str.count(search_mult_rank),
-            "\multicolumn{"
-            + str(latex_str.count(search_mult_rank))
-            + "}{c}{"
-            + avg_rank_name
-            + "} & ",
+            avg_rank_name,
+            "\multicolumn{" + str(index_levels) + "}{c}{" + avg_rank_name + "} ",
         )
     return latex_str
 
@@ -217,6 +253,8 @@ def to_colorized_latex(
     add_rank=False,
     avg_rank_colors_rgb=None,
     avg_rank_name="Avg Rank",
+    level: Union[int, str] = None,
+    level_subset: List[Any] = None,
     **latex_kwargs,
 ) -> (str, str):
     """Transforms pandas DataFrame to colorized LaTex table, with cells colored based on cell rank.
@@ -278,7 +316,8 @@ def to_colorized_latex(
             avg_rank_colors_rgb, "avgrankcolor"
         )
         defined.extend(avg_rank_defined)
-        df = add_avg_rank(df, avg_rank_name)
+        avg_rank_series = add_avg_rank(df, avg_rank_name, level_subset, level)
+        # df = add_avg_rank(df, avg_rank_name)
     else:
         avg_rank_color_proxy = None
         avg_rank_colors = None
@@ -298,10 +337,30 @@ def to_colorized_latex(
             avg_rank_color_proxy,
             avg_rank_name,
             float_format,
+            level,
+            level_subset,
         ),
         axis=axis,
     )
     latex_str = string_df.to_latex(**latex_kwargs)
+    col_avg_rank = _colorize(
+        avg_rank_series,
+        len(avg_rank_color_proxy),
+        precision,
+        ascending,
+        color_proxy,
+        avg_rank_color_proxy,
+        avg_rank_name,
+        float_format,
+        None,
+        None,
+        True,
+    )
+    avg_rank_latex = _avg_rank_to_latex(col_avg_rank, df, float_format, avg_rank_name)
+    latex_str = latex_str.replace(
+        "\\\\\n\\bottomrule\n\\end{tabular}",
+        "\\ \n" + avg_rank_latex + "\n\\bottomrule\n\\end{tabular}",
+    )
     latex_str = _replace_placeholders(
         latex_str,
         color_proxy,
@@ -311,6 +370,7 @@ def to_colorized_latex(
         avg_rank_color_proxy,
         avg_rank_colors,
         avg_rank_name,
+        df.index.nlevels,
     )
     pd.set_option("display.max_colwidth", old_colwidth)
     return latex_str, defined
@@ -333,10 +393,17 @@ def main():
         help="highlight from smallest to largest, default is descending",
     )
     parser.add_argument(
-        "--precision", type=int, help="decimal precision" ",default is 3", default=3,
+        "--precision",
+        type=int,
+        help="decimal precision" ",default is 3",
+        default=3,
     )
     parser.add_argument(
-        "-n", "--nranks", type=int, help="number of ranks to highlight", default=3,
+        "-n",
+        "--nranks",
+        type=int,
+        help="number of ranks to highlight",
+        default=3,
     )
     parser.add_argument(
         "--colors",
@@ -386,7 +453,11 @@ def main():
     data_frame = data_frame.round(args.precision)
 
     result, defined = to_colorized_latex(
-        data_frame, colors_rgb, args.precision, args.ascending, args.columnwise,
+        data_frame,
+        colors_rgb,
+        args.precision,
+        args.ascending,
+        args.columnwise,
     )
 
     if args.full:
