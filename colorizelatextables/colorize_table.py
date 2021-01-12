@@ -75,12 +75,12 @@ _BRACKET_CLOSE = " BRACKET PLACEHOLDER CLOSE "
 _DARK_COLOR_STR = " IS DARK COLOR " + _BRACKET_OPEN
 
 
-def add_avg_rank(df, avg_rank_name="Avg Rank", level_subset=None, level=None):
+def add_avg_rank(df, avg_rank_name="Avg Rank", level_value=None, level=None):
     if isinstance(df.index, pd.MultiIndex):
         avg_rank_name = (avg_rank_name,) * len(df.index.names)
     if level is not None:
         return (
-            df.xs(level_subset, level=level, axis=1)
+            df.xs(level_value, level=level, axis=1)
             .apply(lambda x: x.rank(ascending=False), axis=1)
             .mean()
             .rename(avg_rank_name)
@@ -159,7 +159,7 @@ def _colorize(
     avg_rank_name,
     float_format,
     level,
-    level_subset,
+    level_value,
     isranks=False,
 ):
     # test if contains numeric
@@ -179,7 +179,7 @@ def _colorize(
         color_proxy = avg_rank_color_proxy
     else:
         if level is not None:
-            ranks = row[row.index.get_level_values(level).isin([level_subset])].rank(
+            ranks = row[row.index.get_level_values(level).isin([level_value])].rank(
                 ascending=ascending
             )
         else:
@@ -246,15 +246,16 @@ def _replace_placeholders(
 
 def to_colorized_latex(
     df: pd.DataFrame,
-    colors_rgb: List[Tuple[float]],
+    nranks=3,
+    colors_rgb: List[Tuple[float]] = None,
     precision=3,
     ascending=False,
     columnwise=False,
     add_rank=False,
     avg_rank_colors_rgb=None,
     avg_rank_name="Avg Rank",
-    level: Union[int, str] = None,
-    level_subset: List[Any] = None,
+    level: int = None,
+    level_value=None,
     **latex_kwargs,
 ) -> (str, str):
     """Transforms pandas DataFrame to colorized LaTex table, with cells colored based on cell rank.
@@ -263,6 +264,8 @@ def to_colorized_latex(
     ----------
     df : DataFrame
         DataFrame that will be transformed
+    nranks : int, default 3
+        Number of ranks to highlight, will use default color palette
     colors_rgb : List [Tuple[float]]
         colors that will be used to color cells in rank order.
         It is recommended to use this to pass seaborn color palettes e.g.
@@ -280,6 +283,10 @@ def to_colorized_latex(
         keep in mind that avg rank column will be colored in ascending order
     avg_rank_name: str, default "Avg Rank"
         name of new avg rank column/row
+    level: int
+        If MultiIndex columns are present and only part of the columns should be used for ranking the level that will be used to select the subset to be ranked can be added here
+    level_value: Any
+        If MultiIndex columns are present and only part of the columns should be used for ranking the level_value that will be used to select the subset to be ranked can be added here
     latex_kwargs: key, value mappings
         Other keyword arguments are passed down to ``pandas.DataFrame.to_latex()``.
 
@@ -300,6 +307,14 @@ def to_colorized_latex(
     """
     if columnwise and (add_rank or avg_rank_colors_rgb is not None):
         raise Exception("Adding rank is only possible for rowwise ranking")
+
+    if colors_rgb is None:
+        try:
+            colors_rgb = default_color_palettes[nranks]
+        except KeyError:
+            print(
+                "No default palette with {args.nelements} values available, please provide list of rgb colorcodes"
+            )
     global dark_colors
     dark_colors = []
     old_colwidth = pd.get_option("display.max_colwidth")
@@ -316,7 +331,7 @@ def to_colorized_latex(
             avg_rank_colors_rgb, "avgrankcolor"
         )
         defined.extend(avg_rank_defined)
-        avg_rank_series = add_avg_rank(df, avg_rank_name, level_subset, level)
+        avg_rank_series = add_avg_rank(df, avg_rank_name, level_value, level)
         # df = add_avg_rank(df, avg_rank_name)
     else:
         avg_rank_color_proxy = None
@@ -338,7 +353,7 @@ def to_colorized_latex(
             avg_rank_name,
             float_format,
             level,
-            level_subset,
+            level_value,
         ),
         axis=axis,
     )
