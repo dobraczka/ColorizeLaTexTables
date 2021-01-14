@@ -182,6 +182,7 @@ def _colorize(
             ranks = row[row.index.get_level_values(level).isin([level_value])].rank(
                 ascending=ascending
             )
+            ranks = pd.Series(ranks, row.index)
         else:
             ranks = row.rank(ascending=ascending)
     colored_ranks = ranks.drop_duplicates().nsmallest(n).to_list()
@@ -195,12 +196,7 @@ def _colorize(
             )
         else:
             new.append(_format(e, float_format))
-    if len(new) == len(row.index):
-        return pd.Series(new, row.index)
-    # multicolumn
-    else:
-        combined = pd.Series(new, ranks.index).combine_first(row)
-        return combined.reindex(index=row.index)
+    return pd.Series(new, row.index)
 
 
 def _avg_rank_to_latex(avg_rank_series, df, float_format, avg_rank_name):
