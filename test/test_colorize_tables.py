@@ -57,6 +57,45 @@ expected_multi = (
     + "\n"
 )
 
+expected_normal = (
+    r"\begin{tabular}{lllllllll}"
+    + "\n"
+    + r"\toprule"
+    + "\n"
+    + r"{} &                          A &                          B &      C &                          D &                          E &                          F &      G &                          H \\"
+    + "\n"
+    + r"Data  &                            &                            &        &                            &                            &                            &        &                            \\"
+    + "\n"
+    + r"\midrule"
+    + "\n"
+    + r"data1 &  {\cellcolor{rankcolor1}}0.997 &                      0.763 &  0.795 &                      0.795 &  {\cellcolor{rankcolor1}}0.997 &                      0.993 &  0.909 &                      0.994 \\"
+    + "\n"
+    + r"data2 &                      0.997 &  {\cellcolor{rankcolor1}}0.999 &  0.971 &                      0.971 &                      0.956 &                      0.937 &  0.850 &                      0.930 \\"
+    + "\n"
+    + r"data3 &                      0.999 &  {\cellcolor{rankcolor1}}1.000 &  0.733 &                      0.535 &                      0.322 &  {\cellcolor{rankcolor1}}1.000 &  0.867 &                      0.977 \\"
+    + "\n"
+    + r"data4 &  {\cellcolor{rankcolor1}}0.999 &                      0.799 &  0.929 &  {\cellcolor{rankcolor1}}0.999 &                      0.919 &  {\cellcolor{rankcolor1}}0.999 &  0.926 &  {\cellcolor{rankcolor1}}0.999 \\"
+    + "\n"
+    + r"data5 &                      0.993 &  {\cellcolor{rankcolor1}}1.000 &  0.235 &                      0.386 &  {\cellcolor{rankcolor1}}1.000 &  {\cellcolor{rankcolor1}}1.000 &  0.937 &                      0.937 \\"
+    + "\n"
+    + r"data6 &  {\cellcolor{rankcolor1}}0.987 &                      0.986 &  0.986 &                      0.986 &                      0.980 &                      0.977 &  0.808 &                      0.858 \\"
+    + "\n"
+    + r"data7 &  {\cellcolor{rankcolor1}}0.660 &                      0.558 &  0.558 &                      0.558 &                      0.536 &                      0.536 &  0.361 &                      0.361 \\"
+    + "\n"
+    + r"data8 &  {\cellcolor{rankcolor1}}0.964 &                      0.940 &  0.939 &                      0.939 &                      0.952 &                      0.952 &  0.829 &                      0.875 \\"
+    + "\n"
+    + r"data9 &  {\cellcolor{rankcolor1}}0.732 &                      0.617 &  0.615 &                      0.615 &                      0.644 &                      0.660 &  0.369 &                      0.369 \\"
+    + "\n"
+    + r"{\cellcolor{avgrankcolor1}}\textcolor{white}{1.833} & {\cellcolor{avgrankcolor3}}3.833 & 5.111 & 4.833 & 4.444 & {\cellcolor{avgrankcolor2}}3.556 & 6.722 & 5.667\\ "
+    + "\n"
+    + "\n"
+    + r"\bottomrule"
+    + "\n"
+    + r"\end{tabular}"
+    + "\n"
+)
+
+
 expected_defined = [
     "\definecolor{rankcolor1}{rgb}{0.42274509803921567,0.684075355632449,0.8398923490965013}",
     "\definecolor{avgrankcolor1}{rgb}{0.41636293733179547,0.3190003844675125,0.639923106497501}",
@@ -75,4 +114,15 @@ def test_multiindex():
         level=1,
     )
     assert expected_multi.replace(" ", "") == ls.replace(" ", "")
+    assert expected_defined == defined
+
+
+def test_normal():
+    table = pd.read_csv("test/normal.csv", index_col=[0], header=[0])
+    ls, defined = colat(
+        table,
+        colors_rgb=sns.color_palette("Blues_r", n_colors=1),
+        avg_rank_colors_rgb=sns.color_palette("Purples_r", n_colors=3),
+    )
+    assert expected_normal.replace(" ", "") == ls.replace(" ", "")
     assert expected_defined == defined
