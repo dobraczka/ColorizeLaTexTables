@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "colorizelatextables"
-version = "2.0"
+version = "2.0.0"
 description = "Utility library to transform csv files or pandas dataframes to colorized LaTex tables"
 authors = ["Daniel Obraczka"]
 license = "MIT"

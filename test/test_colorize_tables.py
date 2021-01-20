@@ -86,7 +86,7 @@ expected_normal = (
     + "\n"
     + r"data9 &  {\cellcolor{rankcolor1}}0.732 &                      0.617 &  0.615 &                      0.615 &                      0.644 &                      0.660 &  0.369 &                      0.369 \\"
     + "\n"
-    + r"{\cellcolor{avgrankcolor1}}\textcolor{white}{1.833} & {\cellcolor{avgrankcolor3}}3.833 & 5.111 & 4.833 & 4.444 & {\cellcolor{avgrankcolor2}}3.556 & 6.722 & 5.667\\ "
+    + r"Avg Rank & {\cellcolor{avgrankcolor1}}\textcolor{white}{1.833} & {\cellcolor{avgrankcolor3}}3.833 & 5.111 & 4.833 & 4.444 & {\cellcolor{avgrankcolor2}}3.556 & 6.722 & 5.667\\ "
     + "\n"
     + "\n"
     + r"\bottomrule"
@@ -104,10 +104,30 @@ expected_defined = [
 ]
 
 
-def test_multiindex():
-    multi = pd.read_csv("test/multiindex.csv", index_col=[0, 1], header=[0, 1])
+@pytest.fixture
+def multi_df():
+    return pd.read_csv("test/multiindex.csv", index_col=[0, 1], header=[0, 1])
+
+
+@pytest.fixture
+def normal_df():
+    return pd.read_csv("test/normal.csv", index_col=[0], header=[0])
+
+
+def _check_general_form(ls: str, df: pd.DataFrame):
+    for line in ls.split("\n"):
+        if (
+            len(line) > 2
+            and "rule" not in line
+            and "tabular" not in line
+            and "multicolumn" not in line
+        ):
+            assert len(df.columns) == (line.count("&") + len(df.index.names) - 1)
+
+
+def test_multiindex_full(multi_df):
     ls, defined = colat(
-        multi,
+        multi_df,
         colors_rgb=sns.color_palette("Blues_r", n_colors=1),
         avg_rank_colors_rgb=sns.color_palette("Purples_r", n_colors=3),
         level_value="fm",
@@ -117,12 +137,17 @@ def test_multiindex():
     assert expected_defined == defined
 
 
-def test_normal():
-    table = pd.read_csv("test/normal.csv", index_col=[0], header=[0])
+def test_normal_full(normal_df):
     ls, defined = colat(
-        table,
+        normal_df,
         colors_rgb=sns.color_palette("Blues_r", n_colors=1),
         avg_rank_colors_rgb=sns.color_palette("Purples_r", n_colors=3),
     )
     assert expected_normal.replace(" ", "") == ls.replace(" ", "")
     assert expected_defined == defined
+
+
+@pytest.mark.parametrize("args", [{}])
+def test_normal_args(normal_df, args):
+    ls, defined = colat(normal_df, **args)
+    _check_general_form(ls, normal_df)

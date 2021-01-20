@@ -201,7 +201,7 @@ def _colorize(
 
 def _avg_rank_to_latex(avg_rank_series, df, float_format, avg_rank_name):
     if not isinstance(df.columns, pd.MultiIndex):
-        return " & ".join(avg_rank_series) + "\\\\ \n"
+        return avg_rank_name + " & " + " & ".join(avg_rank_series) + "\\\\ \n"
     else:
         top = list(df.columns.get_level_values(0))
         col_counts = [sum(1 for _ in group) for _, group in groupby(top)]
@@ -303,6 +303,12 @@ def to_colorized_latex(
     """
     if columnwise and (add_rank or avg_rank_colors_rgb is not None):
         raise Exception("Adding rank is only possible for rowwise ranking")
+    if (level is not None or level_value is not None) and not isinstance(
+        df.columns, pd.MultiIndex
+    ):
+        raise Exception(
+            "Using level or level_value is not supported without Multiindex columns"
+        )
 
     if colors_rgb is None:
         try:
@@ -332,6 +338,7 @@ def to_colorized_latex(
     else:
         avg_rank_color_proxy = None
         avg_rank_colors = None
+        avg_rank_series = None
     float_format = (
         latex_kwargs["float_format"]
         if "float_format" in latex_kwargs
@@ -354,24 +361,27 @@ def to_colorized_latex(
         axis=axis,
     )
     latex_str = string_df.to_latex(**latex_kwargs)
-    col_avg_rank = _colorize(
-        avg_rank_series,
-        len(avg_rank_color_proxy),
-        precision,
-        ascending,
-        color_proxy,
-        avg_rank_color_proxy,
-        avg_rank_name,
-        float_format,
-        None,
-        None,
-        True,
-    )
-    avg_rank_latex = _avg_rank_to_latex(col_avg_rank, df, float_format, avg_rank_name)
-    latex_str = latex_str.replace(
-        "\\\\\n\\bottomrule\n\\end{tabular}",
-        "\\\\\n" + avg_rank_latex + "\n\\bottomrule\n\\end{tabular}",
-    )
+    if avg_rank_series is not None:
+        col_avg_rank = _colorize(
+            avg_rank_series,
+            len(avg_rank_color_proxy),
+            precision,
+            ascending,
+            color_proxy,
+            avg_rank_color_proxy,
+            avg_rank_name,
+            float_format,
+            None,
+            None,
+            True,
+        )
+        avg_rank_latex = _avg_rank_to_latex(
+            col_avg_rank, df, float_format, avg_rank_name
+        )
+        latex_str = latex_str.replace(
+            "\\\\\n\\bottomrule\n\\end{tabular}",
+            "\\\\\n" + avg_rank_latex + "\n\\bottomrule\n\\end{tabular}",
+        )
     latex_str = _replace_placeholders(
         latex_str,
         color_proxy,
